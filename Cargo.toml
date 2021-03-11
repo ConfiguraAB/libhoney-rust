@@ -17,7 +17,8 @@ name = "libhoney"
 path = "src/lib.rs"
 
 [features]
-default = ["rustls-tls"]
+default = ["response-channel", "rustls-tls"]
+response-channel = []
 native-tls = ["reqwest/native-tls"]
 rustls-tls = ["reqwest/rustls-tls"]
 
