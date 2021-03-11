@@ -3,12 +3,14 @@
 */
 use std::collections::HashMap;
 
+#[cfg(feature = "response-channel")]
 use crossbeam_channel::Receiver;
 use log::info;
 use serde_json::Value;
 
 use crate::errors::Result;
 use crate::fields::FieldHolder;
+#[cfg(feature = "response-channel")]
 use crate::response::Response;
 use crate::sender::Sender;
 use crate::Event;
@@ -145,6 +147,7 @@ where
     }
 
     /// responses returns a receiver channel with responses
+    #[cfg(feature = "response-channel")]
     pub fn responses(&self) -> Receiver<Response> {
         self.transmission.responses()
     }

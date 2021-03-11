@@ -83,7 +83,9 @@ pub struct Transmission {
 
     work_sender: ChannelSender<Event>,
     work_receiver: ChannelReceiver<Event>,
+    #[cfg(feature = "response-channel")]
     response_sender: ChannelSender<Response>,
+    #[cfg(feature = "response-channel")]
     response_receiver: ChannelReceiver<Response>,
 }
 
@@ -96,6 +98,7 @@ impl Drop for Transmission {
 impl Sender for Transmission {
     fn start(&mut self) {
         let work_receiver = self.work_receiver.clone();
+        #[cfg(feature = "response-channel")]
         let response_sender = self.response_sender.clone();
         let options = self.options.clone();
         let user_agent = self.user_agent.clone();
@@ -107,6 +110,7 @@ impl Sender for Transmission {
         runtime.lock().spawn(async {
             Self::process_work(
                 work_receiver,
+                #[cfg(feature = "response-channel")]
                 response_sender,
                 options,
                 user_agent,
@@ -126,9 +130,11 @@ impl Sender for Transmission {
     }
 
     fn send(&mut self, event: Event) {
+        #[cfg(feature = "response-channel")]
         let clock = Instant::now();
         if self.work_sender.is_full() {
             error!("work sender is full");
+            #[cfg(feature = "response-channel")]
             self.response_sender
                 .send(Response {
                     status_code: None,
@@ -143,12 +149,15 @@ impl Sender for Transmission {
         } else {
             let runtime = self.runtime.clone();
             let work_sender = self.work_sender.clone();
+            #[cfg(feature = "response-channel")]
             let response_sender = self.response_sender.clone();
             runtime.lock().spawn(async move {
-                work_sender
+                #[cfg(feature = "response-channel")]
+                let _ = work_sender
                     .clone()
                     .send_timeout(event.clone(), DEFAULT_SEND_TIMEOUT)
                     .map_err(|e| {
+                        #[cfg(feature = "response-channel")]
                         response_sender
                             .send(Response {
                                 status_code: None,
@@ -160,12 +169,18 @@ impl Sender for Transmission {
                             .unwrap_or_else(|e| {
                                 error!("response dropped, error: {}", e);
                             });
-                    })
+                    });
+
+                #[cfg(not(feature = "response-channel"))]
+                work_sender
+                    .clone()
+                    .send_timeout(event.clone(), DEFAULT_SEND_TIMEOUT)
             });
         }
     }
 
     /// responses provides access to the receiver
+    #[cfg(feature = "response-channel")]
     fn responses(&self) -> ChannelReceiver<Response> {
         self.response_receiver.clone()
     }
@@ -190,6 +205,7 @@ impl Transmission {
         let runtime = Self::new_runtime(None)?;
 
         let (work_sender, work_receiver) = bounded(options.pending_work_capacity * 4);
+        #[cfg(feature = "response-channel")]
         let (response_sender, response_receiver) = bounded(options.pending_work_capacity * 4);
 
         Ok(Self {
@@ -197,7 +213,9 @@ impl Transmission {
             options,
             work_sender,
             work_receiver,
+            #[cfg(feature = "response-channel")]
             response_sender,
+            #[cfg(feature = "response-channel")]
             response_receiver,
             user_agent: format!("{}/{}", DEFAULT_NAME_PREFIX, env!("CARGO_PKG_VERSION")),
             http_client: reqwest::Client::new(),
@@ -206,7 +224,7 @@ impl Transmission {
 
     async fn process_work(
         work_receiver: ChannelReceiver<Event>,
-        response_sender: ChannelSender<Response>,
+        #[cfg(feature = "response-channel")] response_sender: ChannelSender<Response>,
         options: Options,
         user_agent: String,
         http_client: reqwest::Client,
@@ -259,6 +277,7 @@ impl Transmission {
                         batch.len()
                     );
                     let batch_copy = batch.clone();
+                    #[cfg(feature = "response-channel")]
                     let batch_response_sender = response_sender.clone();
                     let batch_user_agent = user_agent.to_string();
                     // This is a shallow clone that allows reusing HTTPS connections across batches.
@@ -268,6 +287,7 @@ impl Transmission {
                     let client_copy = http_client.clone();
 
                     runtime.spawn(async move {
+                        #[cfg(feature = "response-channel")]
                         for response in Self::send_batch(
                             batch_copy,
                             options,
@@ -275,12 +295,21 @@ impl Transmission {
                             Instant::now(),
                             client_copy,
                         )
-                        .await
-                        {
+                        .await {
                             batch_response_sender
                                 .send(response)
                                 .expect("unable to enqueue batch response");
-                        }
+                        };
+
+                        #[cfg(not(feature = "response-channel"))]
+                        Self::send_batch(
+                            batch_copy,
+                            options,
+                            batch_user_agent,
+                            Instant::now(),
+                            client_copy,
+                        )
+                        .await;
                     });
                     batches_sent.push(batch_name.to_string())
                 }
