@@ -1,6 +1,8 @@
+#[cfg(feature = "response-channel")]
 use crossbeam_channel::Receiver;
 
 use crate::errors::Result;
+#[cfg(feature = "response-channel")]
 use crate::response::Response;
 use crate::Event;
 
@@ -19,5 +21,6 @@ pub trait Sender {
 
     /// `responses` returns a channel that will contain a single Response for each Event
     /// added. Note that they may not be in the same order as they came in
+    #[cfg(feature = "response-channel")]
     fn responses(&self) -> Receiver<Response>;
 }
