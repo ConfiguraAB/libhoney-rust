@@ -18,6 +18,7 @@ path = "src/lib.rs"
 
 [features]
 default = ["rustls-tls"]
+response-channel = []
 native-tls = ["reqwest/native-tls"]
 rustls-tls = ["reqwest/rustls-tls"]
 

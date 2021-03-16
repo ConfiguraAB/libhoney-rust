@@ -40,6 +40,7 @@ impl Sender for TransmissionMock {
 
     // `responses` returns a channel that will contain a single Response for each
     // Event added. Note that they may not be in the same order as they came in
+    #[cfg(feature = "response-channel")]
     fn responses(&self) -> Receiver<Response> {
         self.responses.clone()
     }
